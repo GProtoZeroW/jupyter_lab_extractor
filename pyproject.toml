@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jupyter-lab-extractor"
+version = "0.1.0"
+description = "A Jupyter cell magic that extracts cell contents to Python files"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+dependencies = [
+    "ipython",
+    "ipynbname",
+]
+
+[project.urls]
+Repository = "https://github.com/GProtoZeroW/jupyter_lab_extractor"
