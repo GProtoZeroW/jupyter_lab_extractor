@@ -16,3 +16,23 @@ dependencies = [
 
 [project.urls]
 Repository = "https://github.com/GProtoZeroW/jupyter_lab_extractor"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "ipytest>=0.13.0",
+    "jupytext>=1.14.0",
+    "loguru>=0.7.0",
+    "notebook>=6.0.0",
+    "jupyterlab>=3.0.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "ipytest>=0.13.0",
+    "jupytext>=1.14.0",
+    "loguru>=0.7.0",
+    "notebook>=6.0.0",
+    "jupyterlab>=3.0.0",
+    "build>=0.10.0",
+    "twine>=4.0.0",
+]
