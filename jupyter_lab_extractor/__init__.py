@@ -22,6 +22,7 @@ Usage:
 from IPython.core.magic import register_cell_magic
 from datetime import datetime
 import re
+import os
 
 try:
     from ipynbname import _find_nb_path
@@ -74,6 +75,9 @@ def extract(line, cell):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     header = f"# Source: {_NOTEBOOK_REL_PATH} | Cell In[{exec_count}] | {timestamp}\n"
 
+    # Ensure parent directories exist
+    os.makedirs(os.path.dirname(target) or '.', exist_ok=True)
+    
     # Write to the target file
     with open(target, mode) as f:
         f.write(header)

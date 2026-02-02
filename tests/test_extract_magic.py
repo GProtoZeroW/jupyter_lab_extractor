@@ -18,7 +18,7 @@
 #
 # This notebook tests the `%%extract` cell magic from the `jupyter_lab_extractor` package.
 #
-# **Note:** This notebook is paired with a `.py`  script via Jupytext.
+# **Note:** This notebook is paired with a `.py` script via Jupytext.
 # Always run from the `.ipynb` — the `.py` file is for version control / diffing only.
 # Running the `.py` directly will not work since cell magics require a live Jupyter kernel.
 
@@ -27,8 +27,9 @@
 # 1. Writing cell contents to a new file
 # 2. Appending to an existing file with `-a`
 # 3. Overwriting an existing file (default `-w` behavior)
-# 4. Metadata headers and magic line stripping
-# 5. Error handling
+# 4. Using `%%extract` and `%%ipytest` together on the same cell
+# 5. Metadata headers and magic line stripping
+# 6. Error handling
 
 # %% [markdown]
 # ---
@@ -103,8 +104,19 @@ logger.success("ipytest configured")
 logger.success("jupyter_lab_extractor magic loaded")
 
 # %% [markdown]
-# ---
-# # Superficial Usage Tests
+# ## Prepare Output Directory
+# All extracted files go into a subfolder to keep the test directory clean.
+
+# %%
+OUTPUT_DIR = Path("test_demo_outputs")
+if OUTPUT_DIR.exists():
+    shutil.rmtree(OUTPUT_DIR)
+    logger.debug(f"Cleared existing {OUTPUT_DIR}/")
+OUTPUT_DIR.mkdir(exist_ok=True)
+logger.success(f"Output directory ready: {OUTPUT_DIR}/")
+
+# %% [markdown]
+# # Usage Examples (with quick confirm test)
 # These cells use `%%extract` as a user would in a real notebook,
 # then verify the output with ipytest.
 
@@ -114,22 +126,28 @@ logger.success("jupyter_lab_extractor magic loaded")
 # and a metadata header comment.
 
 # %%
-# %%extract test_output_1.py
+# %%extract test_demo_outputs/test_output_1.py
 x = 42
 y = "hello"
 
 # %%
-logger.info("Wrote test_output_1.py — checking contents:")
-logger.debug(open("test_output_1.py").read())
+logger.info("Wrote test_demo_outputs/test_output_1.py — checking contents:")
+logger.debug(open("test_demo_outputs/test_output_1.py").read())
 
 # %%
 # %%ipytest
 
+from loguru import logger
+
 def test_write_new_file():
-    content = open("test_output_1.py").read()
+    content = open("test_demo_outputs/test_output_1.py").read()
     assert "x = 42" in content
+    logger.debug("Found 'x = 42'")
     assert 'y = "hello"' in content
+    logger.debug("Found 'y = \"hello\"'")
     assert "# Source:" in content
+    logger.debug("Found metadata header")
+    logger.success("test_write_new_file passed")
 
 # %% [markdown]
 # ## Test 2: Write Then Append
@@ -140,24 +158,24 @@ def test_write_new_file():
 # ### Write the initial file
 
 # %%
-# %%extract test_output_2.py
+# %%extract test_demo_outputs/test_output_2.py
 import os
 CONSTANT = 100
 
 # %%
-logger.info("Wrote test_output_2.py — initial block")
+logger.info("Wrote test_demo_outputs/test_output_2.py — initial block")
 
 # %% [markdown]
 # ### Append a second block
 
 # %%
-# %%extract test_output_2.py -a
+# %%extract test_demo_outputs/test_output_2.py -a
 def helper():
     return CONSTANT * 2
 
 # %%
-logger.info("Appended to test_output_2.py — checking contents:")
-logger.debug(open("test_output_2.py").read())
+logger.info("Appended to test_demo_outputs/test_output_2.py — checking contents:")
+logger.debug(open("test_demo_outputs/test_output_2.py").read())
 
 # %% [markdown]
 # ### Confirm both blocks are present
@@ -165,13 +183,21 @@ logger.debug(open("test_output_2.py").read())
 # %%
 # %%ipytest
 
+from loguru import logger
+
 def test_write_then_append():
-    content = open("test_output_2.py").read()
+    content = open("test_demo_outputs/test_output_2.py").read()
     assert "import os" in content
+    logger.debug("Found 'import os'")
     assert "CONSTANT = 100" in content
+    logger.debug("Found 'CONSTANT = 100'")
     assert "def helper():" in content
+    logger.debug("Found 'def helper():'")
     assert "return CONSTANT * 2" in content
+    logger.debug("Found 'return CONSTANT * 2'")
     assert content.count("# Source:") == 2
+    logger.debug("Found 2 metadata headers")
+    logger.success("test_write_then_append passed")
 
 # %% [markdown]
 # ## Test 3: Overwrite Replaces Existing Content
@@ -182,19 +208,19 @@ def test_write_then_append():
 # ### Make a copy to work with
 
 # %%
-shutil.copy("test_output_2.py", "test_output_2_copy.py")
+shutil.copy("test_demo_outputs/test_output_2.py", "test_demo_outputs/test_output_2_copy.py")
 logger.info("Copied test_output_2.py -> test_output_2_copy.py")
 
 # %% [markdown]
 # ### Overwrite the copy with new content
 
 # %%
-# %%extract test_output_2_copy.py
+# %%extract test_demo_outputs/test_output_2_copy.py
 completely_new = True
 
 # %%
-logger.info("Overwrote test_output_2_copy.py — checking contents:")
-logger.debug(open("test_output_2_copy.py").read())
+logger.info("Overwrote test_demo_outputs/test_output_2_copy.py — checking contents:")
+logger.debug(open("test_demo_outputs/test_output_2_copy.py").read())
 
 # %% [markdown]
 # ### Confirm old content is gone
@@ -202,12 +228,43 @@ logger.debug(open("test_output_2_copy.py").read())
 # %%
 # %%ipytest
 
+from loguru import logger
+
 def test_overwrite_copy():
-    content = open("test_output_2_copy.py").read()
+    content = open("test_demo_outputs/test_output_2_copy.py").read()
     assert "completely_new = True" in content
+    logger.debug("Found 'completely_new = True'")
     assert "CONSTANT" not in content
+    logger.debug("Confirmed old 'CONSTANT' is gone")
     assert "def helper" not in content
+    logger.debug("Confirmed old 'def helper' is gone")
     assert content.count("# Source:") == 1
+    logger.debug("Found exactly 1 metadata header")
+    logger.success("test_overwrite_copy passed")
+
+# %% [markdown]
+# ## Test 4: Extract + ipytest Combo
+# This cell is both extracted to a file AND run as a test simultaneously.
+# Demonstrates that `%%extract` does not interfere with cell execution,
+# even when another cell magic (`%%ipytest`) is present in the cell body.
+
+# %%
+# %%extract test_demo_outputs/extracted_test.py
+# %%ipytest
+
+from loguru import logger
+
+def test_round_trip():
+    """This test was both run by ipytest AND extracted to a file"""
+    assert 1 + 1 == 2
+    logger.debug("1 + 1 == 2")
+    assert "hello".upper() == "HELLO"
+    logger.debug("'hello'.upper() == 'HELLO'")
+    logger.success("test_round_trip passed — cell was extracted and executed")
+
+# %%
+logger.info("Checking extracted_test.py contents:")
+logger.debug(open("test_demo_outputs/extracted_test.py").read())
 
 # %% [markdown]
 # ---
@@ -222,6 +279,7 @@ def test_overwrite_copy():
 # %%ipytest
 
 import os
+from loguru import logger
 
 def test_extract_overwrite(tmp_path):
     """Test that default mode overwrites the file"""
@@ -231,13 +289,19 @@ def test_extract_overwrite(tmp_path):
     # Write something first
     with open(target, 'w') as f:
         f.write("old content\n")
+    logger.debug(f"Wrote 'old content' to {target}")
 
     ip.run_cell_magic('extract', target, 'x = 1')
+    logger.debug(f"Ran %%extract on {target}")
 
     content = open(target).read()
     assert "old content" not in content
+    logger.debug("Confirmed 'old content' was overwritten")
     assert "x = 1" in content
+    logger.debug("Found 'x = 1'")
     assert "# Source:" in content
+    logger.debug("Found metadata header")
+    logger.success("test_extract_overwrite passed")
 
 # %% [markdown]
 # ## Append Mode (`-a`)
@@ -245,24 +309,32 @@ def test_extract_overwrite(tmp_path):
 # %%
 # %%ipytest
 
+from loguru import logger
+
 def test_extract_append(tmp_path):
     """Test that -a appends to the file"""
     target = str(tmp_path / "out.py")
 
     ip = get_ipython()
     ip.run_cell_magic('extract', target, 'x = 1')
+    logger.debug(f"Wrote first block to {target}")
     ip.run_cell_magic('extract', f'{target} -a', 'y = 2')
+    logger.debug(f"Appended second block to {target}")
 
     content = open(target).read()
     assert "x = 1" in content
     assert "y = 2" in content
     assert content.count("# Source:") == 2
+    logger.debug("Found both blocks and 2 metadata headers")
+    logger.success("test_extract_append passed")
 
 # %% [markdown]
 # ## Magic Lines Are Stripped
 
 # %%
 # %%ipytest
+
+from loguru import logger
 
 def test_magic_lines_stripped(tmp_path):
     """Test that % and %% magic lines are removed from output"""
@@ -271,12 +343,18 @@ def test_magic_lines_stripped(tmp_path):
     ip = get_ipython()
     cell_content = "%matplotlib inline\nimport numpy as np\n%%time\nx = 1"
     ip.run_cell_magic('extract', target, cell_content)
+    logger.debug(f"Extracted cell with mixed magic lines to {target}")
 
     content = open(target).read()
     assert "matplotlib" not in content
+    logger.debug("Confirmed '%matplotlib inline' was stripped")
     assert "%%time" not in content
+    logger.debug("Confirmed '%%time' was stripped")
     assert "import numpy as np" in content
+    logger.debug("Confirmed 'import numpy as np' was kept")
     assert "x = 1" in content
+    logger.debug("Confirmed 'x = 1' was kept")
+    logger.success("test_magic_lines_stripped passed")
 
 # %% [markdown]
 # ## Missing Filename Raises Error
@@ -285,18 +363,22 @@ def test_magic_lines_stripped(tmp_path):
 # %%ipytest
 
 import pytest
+from loguru import logger
 
 def test_extract_no_filename():
     """Test that missing filename raises ValueError"""
     ip = get_ipython()
     with pytest.raises(ValueError):
         ip.run_cell_magic('extract', '', 'x = 1')
+    logger.success("test_extract_no_filename passed — ValueError raised as expected")
 
 # %% [markdown]
 # ## Metadata Header Format
 
 # %%
 # %%ipytest
+
+from loguru import logger
 
 def test_metadata_header(tmp_path):
     """Test that header contains expected metadata fields"""
@@ -307,24 +389,13 @@ def test_metadata_header(tmp_path):
 
     content = open(target).read()
     header = content.splitlines()[0]
+    logger.debug(f"Header: {header}")
     assert header.startswith("# Source:")
+    logger.debug("Header starts with '# Source:'")
     assert "Cell In[" in header
+    logger.debug("Header contains cell execution number")
     assert "|" in header
-
-# %% [markdown]
-# ---
-# ## Extract + ipytest Combo (BROKEN — needs `os.makedirs` fix)
-# This cell attempts to both extract itself to a file AND run as a test.
-# Currently fails because `%%extract` does not create parent directories.
-# Leaving as-is until the fix is applied.
-
-# %%
-# # %%extract tests/extracted_test.py
-# # %%ipytest
-
-# def test_round_trip():
-#     """This test was both run by ipytest AND extracted to a file"""
-#     assert 1 + 1 == 2
-#     assert "hello".upper() == "HELLO"
+    logger.debug("Header contains pipe delimiters")
+    logger.success("test_metadata_header passed")
 
 # %%
