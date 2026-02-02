@@ -123,6 +123,14 @@ These are not required to use the package, only for development:
 - [Jupytext](https://github.com/mwouts/jupytext) — notebook/script pairing for version control
 - [loguru](https://github.com/Delgan/loguru) — logging in test cells
 
+## Credits
+
+**Author:** [GProtoZeroW](https://github.com/GProtoZeroW)
+
+This project was crafted with extensive help from:
+- Claude Opus 4.5 (web chat)
+- Claude Code (claude.ai/code) running Claude Opus 4.1
+
 ## License
 
 MIT
