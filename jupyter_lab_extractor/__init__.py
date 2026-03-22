@@ -79,7 +79,7 @@ def extract(line, cell):
     os.makedirs(os.path.dirname(target) or '.', exist_ok=True)
     
     # Write to the target file
-    with open(target, mode) as f:
+    with open(target, mode, encoding="utf-8") as f:
         f.write(header)
         f.write(cleaned)
         f.write('\n')
