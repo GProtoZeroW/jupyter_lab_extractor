@@ -6,7 +6,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.17.3
+#       jupytext_version: 1.19.5
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -397,5 +397,182 @@ def test_metadata_header(tmp_path):
     assert "|" in header
     logger.debug("Header contains pipe delimiters")
     logger.success("test_metadata_header passed")
+
+# %% [markdown]
+# ---
+# # Feature: `--strip-ipytest`
+#
+# `ipytest.clean()` and `ipytest.run()` drive the *in-notebook* test runner.
+# Left in an extracted file they would wipe or re-run the collected tests at
+# import time, so `--strip-ipytest` drops them (along with `clean_tests()` and
+# `autoconfig()`) and trims the blank padding they leave behind.
+#
+# That is what lets many clean/define/run cells stack via `-a` into a single
+# importable test module.
+
+# %% [markdown]
+# ## Unit tests on the cleaning logic
+# `_clean_cell` is the pure function behind the magic. Testing it directly
+# avoids executing `ipytest.clean()`/`ipytest.run()` as a side effect of a test.
+
+# %%
+# %%ipytest
+
+from jupyter_lab_extractor import _clean_cell
+from loguru import logger
+
+CLEAN_RUN_CELL = (
+    "ipytest.clean()\n"
+    "\n"
+    "\n"
+    "def test_example(unbounded):\n"
+    "    unbounded.requested_value = 1.234567891e9\n"
+    "    assert float(unbounded.requested_value_scpi) == 1.234567891e9\n"
+    "\n"
+    "\n"
+    "ipytest.run()\n"
+)
+
+
+def test_strip_removes_clean_and_run():
+    out = _clean_cell(CLEAN_RUN_CELL, strip_ipytest=True)
+    assert "ipytest.clean" not in out
+    logger.debug("ipytest.clean() removed")
+    assert "ipytest.run" not in out
+    logger.debug("ipytest.run() removed")
+    assert "def test_example(unbounded):" in out
+    logger.debug("test body kept")
+    logger.success("test_strip_removes_clean_and_run passed")
+
+
+def test_strip_trims_blank_padding():
+    """Dropping the scaffolding must not leave blank lines at the block edges."""
+    out = _clean_cell(CLEAN_RUN_CELL, strip_ipytest=True)
+    assert not out.startswith("\n")
+    logger.debug("no leading blank line")
+    assert not out.rstrip("\n").endswith("\n")
+    logger.debug("no trailing blank padding")
+    logger.success("test_strip_trims_blank_padding passed")
+
+
+def test_without_flag_scaffolding_is_kept():
+    """Default behavior is unchanged -- stripping is opt-in."""
+    out = _clean_cell(CLEAN_RUN_CELL)
+    assert "ipytest.clean()" in out
+    assert "ipytest.run()" in out
+    logger.debug("scaffolding preserved when flag is absent")
+    logger.success("test_without_flag_scaffolding_is_kept passed")
+
+
+def test_strip_covers_all_scaffolding_variants():
+    cell = "ipytest.autoconfig()\nipytest.clean_tests()\nx = 1\nipytest.run('-qq')\n"
+    out = _clean_cell(cell, strip_ipytest=True)
+    assert "autoconfig" not in out
+    logger.debug("autoconfig() removed")
+    assert "clean_tests" not in out
+    logger.debug("clean_tests() removed")
+    assert "ipytest.run" not in out
+    logger.debug("run() with arguments removed")
+    assert "x = 1" in out
+    logger.debug("surrounding code kept")
+    logger.success("test_strip_covers_all_scaffolding_variants passed")
+
+
+def test_magic_lines_still_stripped_with_flag():
+    cell = "%%ipytest\nimport os\nipytest.run()\n"
+    out = _clean_cell(cell, strip_ipytest=True)
+    assert "%%ipytest" not in out
+    logger.debug("magic line still stripped alongside ipytest calls")
+    assert "import os" in out
+    logger.success("test_magic_lines_still_stripped_with_flag passed")
+
+# %% [markdown]
+# ## A mistyped flag is rejected
+# Silently ignoring an unknown flag would quietly write the wrong file contents.
+
+# %%
+# %%ipytest
+
+import pytest
+from loguru import logger
+
+
+def test_unknown_flag_raises():
+    ip = get_ipython()
+    with pytest.raises(ValueError, match="Unknown flag"):
+        ip.run_cell_magic('extract', 'never_written.py --strip-ipytests', 'x = 1')
+    logger.success("test_unknown_flag_raises passed -- typo rejected before writing")
+
+# %% [markdown]
+# ## End-to-end: stacking clean/run cells into one file
+# These cells use `%%extract` exactly as a user would. Each one cleans, defines
+# a test, and runs it *in the notebook*, while the extracted file accumulates
+# only the test definitions.
+
+# %%
+# %%extract test_demo_outputs/test_stacked.py --strip-ipytest
+ipytest.clean()
+
+
+def test_stacked_one():
+    assert True
+
+
+ipytest.run()
+
+# %%
+# %%extract test_demo_outputs/test_stacked.py -a --strip-ipytest
+ipytest.clean()
+
+
+def test_stacked_two():
+    assert 1 + 1 == 2
+
+
+ipytest.run()
+
+# %%
+# %%extract test_demo_outputs/test_stacked.py -a --strip-ipytest
+ipytest.clean()
+
+
+def test_stacked_three():
+    assert "a".upper() == "A"
+
+
+ipytest.run()
+
+# %%
+logger.info("Stacked three cells into test_demo_outputs/test_stacked.py:")
+logger.debug(open("test_demo_outputs/test_stacked.py").read())
+
+# %% [markdown]
+# ### Confirm the stacked file is clean and importable
+
+# %%
+# %%ipytest
+
+from loguru import logger
+
+
+def test_stacked_file_is_clean_and_importable():
+    content = open("test_demo_outputs/test_stacked.py").read()
+
+    assert content.count("# Source:") == 3
+    logger.debug("Found 3 metadata headers -- one per cell")
+    assert "ipytest." not in content
+    logger.debug("No ipytest scaffolding survived into the file")
+
+    for name in ("test_stacked_one", "test_stacked_two", "test_stacked_three"):
+        assert f"def {name}():" in content
+        logger.debug(f"Found {name}")
+
+    # The whole point of the flag: the result must be valid, importable Python.
+    namespace = {}
+    exec(compile(content, "test_stacked.py", "exec"), namespace)
+    collected = sorted(n for n in namespace if n.startswith("test_"))
+    assert collected == ["test_stacked_one", "test_stacked_three", "test_stacked_two"]
+    logger.debug(f"All three tests importable: {collected}")
+    logger.success("test_stacked_file_is_clean_and_importable passed")
 
 # %%

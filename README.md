@@ -91,6 +91,41 @@ def test_get_data_path():
 
 The cell is extracted (with `%%ipytest` stripped from the output file), and ipytest runs the test — all in one shot. This means your test notebook is both the test runner and the source of truth for the exported test file. See `tests/test_extract_magic.ipynb` for a working example of this pattern.
 
+### Stack ipytest cells into one clean file (`--strip-ipytest`)
+
+The other common ipytest workflow calls `ipytest.clean()` and `ipytest.run()` explicitly, once per cell:
+
+```python
+%%extract tests/test_clkgen.py -a --strip-ipytest
+ipytest.clean()
+
+
+def test_encode_round_trips_exactly(unbounded):
+    unbounded.requested_value = 1.234567891e9
+    assert float(unbounded.requested_value_scpi) == 1.234567891e9
+
+
+ipytest.run()
+```
+
+Those calls drive the *in-notebook* runner. Written verbatim into a `.py` file they'd wipe or re-run the collected tests at import time, and repeating them once per cell would leave the stacked file full of scaffolding.
+
+`--strip-ipytest` drops them — `ipytest.clean()`, `ipytest.clean_tests()`, `ipytest.run()` (with or without arguments), and `ipytest.autoconfig()` — along with the blank padding they leave behind. Put the flag on every cell, and any number of clean/define/run cells stack via `-a` into one importable module:
+
+```python
+# Source: notebooks/clkgen.ipynb | Cell In[12] | 2026-02-01 14:30:22
+def test_encode_round_trips_exactly(unbounded):
+    unbounded.requested_value = 1.234567891e9
+    assert float(unbounded.requested_value_scpi) == 1.234567891e9
+
+# Source: notebooks/clkgen.ipynb | Cell In[13] | 2026-02-01 14:30:41
+def test_encode_is_not_g_format(unbounded):
+    unbounded.requested_value = 1.234567891e9
+    assert unbounded.requested_value_scpi != f"{1.234567891e9:g}"
+```
+
+Your notebook still cleans and runs each test as you write it; the exported file is plain pytest. The flag is opt-in — without it, `ipytest` calls are written through unchanged.
+
 ## How It Differs From Alternatives
 
 | | Runs the cell? | Per-cell control? | Multiple output files? |

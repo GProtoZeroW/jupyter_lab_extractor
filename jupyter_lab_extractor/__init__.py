@@ -16,6 +16,9 @@ Usage:
 
     %%extract myfile.py -w
     # Explicitly overwrite
+
+    %%extract myfile.py -a --strip-ipytest
+    # Appends, dropping ipytest.clean()/run()/autoconfig() scaffolding lines
 """
 
 # pip install ipynbname
@@ -34,6 +37,40 @@ except Exception:
     _NOTEBOOK_REL_PATH = "unknown_path"
 
 
+_USAGE = "Usage: %%extract filename.py [-w|-a] [--strip-ipytest]"
+
+_KNOWN_FLAGS = {'-w', '-a', '--strip-ipytest'}
+
+# Magic invocations (% or %%) -- meaningless in a plain .py file.
+_MAGIC_RE = re.compile(r'^\s*%%?[a-zA-Z]')
+
+# ipytest scaffolding calls. These drive the in-notebook test runner; left in an
+# extracted file they would wipe or re-run the collected tests at import time.
+_IPYTEST_SCAFFOLD_RE = re.compile(r'^\s*ipytest\.(clean|clean_tests|run|autoconfig)\s*\(')
+
+
+def _clean_cell(cell, strip_ipytest=False):
+    """
+    Turn raw cell source into what gets written to the target file.
+
+    Always drops magic lines. With strip_ipytest, also drops ipytest
+    scaffolding calls and the blank padding they leave behind, so that
+    cells appended with -a stack into one clean, importable module.
+    """
+    lines = [ln for ln in cell.splitlines() if not _MAGIC_RE.match(ln)]
+
+    if strip_ipytest:
+        lines = [ln for ln in lines if not _IPYTEST_SCAFFOLD_RE.match(ln)]
+        # Removing the scaffolding strands blank lines at the block edges;
+        # trimming them keeps appended blocks from drifting apart.
+        while lines and not lines[0].strip():
+            lines.pop(0)
+        while lines and not lines[-1].strip():
+            lines.pop()
+
+    return '\n'.join(lines) + '\n'
+
+
 @register_cell_magic
 def extract(line, cell):
     """
@@ -49,26 +86,30 @@ def extract(line, cell):
 
         %%extract myfile.py -a
         # Append to myfile.py
+
+        %%extract myfile.py -a --strip-ipytest
+        # Append, dropping ipytest.clean()/run()/autoconfig() lines so that
+        # repeated clean/run cells stack into one importable test module
     """
     args = line.strip().split()
     if not args:
-        raise ValueError("You must specify a target file: %%extract filename.py [-w|-a]")
+        raise ValueError("You must specify a target file. " + _USAGE)
 
     flags = [a for a in args if a.startswith('-')]
     files = [a for a in args if not a.startswith('-')]
 
     if not files:
-        raise ValueError("You must specify a target file: %%extract filename.py [-w|-a]")
+        raise ValueError("You must specify a target file. " + _USAGE)
+
+    unknown = [f for f in flags if f not in _KNOWN_FLAGS]
+    if unknown:
+        # Silently ignoring a typo'd flag would quietly write the wrong contents.
+        raise ValueError(f"Unknown flag(s): {' '.join(unknown)}. " + _USAGE)
 
     target = files[0]
     mode = 'a' if '-a' in flags else 'w'
 
-    # Strip out any lines that are magic commands (% or %%)
-    cleaned_lines = [
-        ln for ln in cell.splitlines()
-        if not re.match(r'^\s*%%?[a-zA-Z]', ln)
-    ]
-    cleaned = '\n'.join(cleaned_lines) + '\n'
+    cleaned = _clean_cell(cell, strip_ipytest='--strip-ipytest' in flags)
 
     # Build metadata header
     exec_count = get_ipython().execution_count
