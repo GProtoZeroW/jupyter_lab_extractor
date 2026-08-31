@@ -1,5 +1,7 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+# 77 is the real floor, not 61: `license` below is a PEP 639 SPDX expression,
+# and setuptools rejects it as an invalid project.license before that version.
+requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,9 +10,43 @@ version = "0.1.0"
 description = "A Jupyter cell magic that extracts cell contents to Python files"
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.9"
-dependencies = [
+authors = [
+    { name = "GProtoZeroW", email = "GProtoZeroW@users.noreply.github.com" },
+]
+keywords = [
+    "jupyter",
+    "jupyterlab",
+    "notebook",
     "ipython",
+    "cell-magic",
+    "extract",
+    "literate-programming",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Framework :: IPython",
+    "Framework :: Jupyter",
+    "Framework :: Jupyter :: JupyterLab",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Utilities",
+]
+dependencies = [
+    # Tested against 8.18 (Python 3.9) and 9.x (Python 3.13). The floor is the
+    # first release supporting Python 3.9, which is this package's own floor.
+    "ipython>=7.20",
     "ipynbname",
 ]
 
@@ -21,7 +57,10 @@ packages = ["jupyter_lab_extractor"]
 jlx = "jupyter_lab_extractor.cli:main"
 
 [project.urls]
+Homepage = "https://github.com/GProtoZeroW/jupyter_lab_extractor"
 Repository = "https://github.com/GProtoZeroW/jupyter_lab_extractor"
+Issues = "https://github.com/GProtoZeroW/jupyter_lab_extractor/issues"
+Changelog = "https://github.com/GProtoZeroW/jupyter_lab_extractor/blob/main/CHANGELOG.md"
 
 # `cli` stays an extra: this package is consumed as a git dependency by kicad-db,
 # serdeslab, physmathrepr and micropython-i2c, and `jlx run` is real published

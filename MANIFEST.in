@@ -1,0 +1,11 @@
+# setuptools auto-includes tests/*.py but not the notebooks, which would ship a
+# test suite that cannot run: test_cli_demo_notebook.py drives demo_plots.ipynb.
+include LICENSE
+include README.md
+include CHANGELOG.md
+recursive-include tests *.ipynb *.py *.md
+
+# Jupyter's autosave directory is untracked scratch, not source.
+prune tests/.ipynb_checkpoints
+global-exclude *.py[cod]
+global-exclude .ipynb_checkpoints/*

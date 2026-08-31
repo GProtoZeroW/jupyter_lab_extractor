@@ -288,8 +288,14 @@ notebook runnable.
 ```bash
 git clone https://github.com/GProtoZeroW/jupyter_lab_extractor.git
 cd jupyter_lab_extractor
-pip install -e ".[dev]"
+uv sync
 ```
+
+`uv sync` is enough on its own: the test and notebook dependencies are
+[PEP 735](https://peps.python.org/pep-0735/) dependency groups rather than
+extras, and groups install by default, so you get a working kernel without
+remembering a flag. With pip 25.1 or newer, `pip install -e . --group dev` is
+the equivalent.
 
 Tests live in `tests/test_extract_magic.ipynb` and use
 [ipytest](https://github.com/chmp/ipytest) for in-notebook testing. Run it from the
