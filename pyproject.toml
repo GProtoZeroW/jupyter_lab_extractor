@@ -23,6 +23,12 @@ jlx = "jupyter_lab_extractor.cli:main"
 [project.urls]
 Repository = "https://github.com/GProtoZeroW/jupyter_lab_extractor"
 
+# `cli` stays an extra: this package is consumed as a git dependency by kicad-db,
+# serdeslab, physmathrepr and micropython-i2c, and `jlx run` is real published
+# surface a consumer may want. Test tooling and JupyterLab are not -- nobody
+# should be able to install those as a feature -- so they moved to PEP 735
+# groups below, which are never published and, unlike extras, are installed by a
+# bare `uv sync`, so .venv gets a kernel without anyone remembering a flag.
 [project.optional-dependencies]
 cli = [
     "jupytext>=1.14.0",
@@ -30,15 +36,31 @@ cli = [
     "nbformat>=5.0",
     "ipykernel>=6.0",
 ]
+
+# No consumer referenced jupyter-lab-extractor[test]; all four depend on the
+# bare name. The self-reference below is the extras mechanism used correctly:
+# tests/test_cli_*.py exercise the CLI, so they need what `cli` installs.
+[dependency-groups]
 test = [
     "jupyter-lab-extractor[cli]",
     "pytest>=7.0.0",
     "ipytest>=0.13.0",
-    "notebook>=6.0.0",
-    "jupyterlab>=3.0.0",
 ]
+
+# The magic is exercised from inside a live notebook, so the notebook stack is
+# part of developing it, not an optional add-on.
+notebook = [
+    "jupyterlab>=3.0.0",
+    "notebook>=6.0.0",
+]
+
 dev = [
-    "jupyter-lab-extractor[test]",
+    { include-group = "test" },
+    { include-group = "notebook" },
     "build>=0.10.0",
     "twine>=4.0.0",
 ]
+
+[tool.uv]
+# dev pulls in notebook, so a bare `uv sync` yields a launchable env.
+default-groups = ["dev"]
