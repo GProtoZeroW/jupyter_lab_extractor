@@ -45,6 +45,11 @@ test = [
     "jupyter-lab-extractor[cli]",
     "pytest>=7.0.0",
     "ipytest>=0.13.0",
+    # Exercised by the rich-output test: `jlx run` must persist a rendered
+    # figure and DataFrame back into the .ipynb, which needs real libraries
+    # producing real image/png and text/html payloads.
+    "matplotlib>=3.5",
+    "pandas>=1.3",
 ]
 
 # The magic is exercised from inside a live notebook, so the notebook stack is

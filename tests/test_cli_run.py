@@ -7,6 +7,7 @@ with:
     pytest tests/test_cli_run.py
 """
 
+import base64
 import json
 import os
 
@@ -39,6 +40,20 @@ def _write_notebook(path, *sources):
 def _outputs(path):
     nb = nbformat.read(str(path), as_version=4)
     return [cell.get("outputs", []) for cell in nb.cells]
+
+
+def _first_mime(cell, mime):
+    """The `mime` payload of a raw-JSON cell's first output carrying it.
+
+    nbformat splits text payloads into a list of lines on write but leaves
+    base64 blobs as one string, so both shapes have to be handled.
+    """
+    for out in cell.get("outputs", []):
+        data = out.get("data", {})
+        if mime in data:
+            value = data[mime]
+            return "".join(value) if isinstance(value, list) else value
+    return None
 
 
 @pytest.fixture(autouse=True)
@@ -132,6 +147,36 @@ def test_allow_errors_continues_but_still_reports_failure(tmp_path):
     assert any("later" in out.get("text", "") for out in cells[1])
 
 
+def test_run_stops_at_the_failure_leaving_a_later_healthy_cell_unrun(tmp_path):
+    """A good prefix, a raising cell, then a good cell that must not execute.
+
+    The two-cell case above shows the traceback is kept; this one shows the
+    stop is a real stop -- a perfectly runnable cell downstream of the failure
+    is left alone rather than run out of a broken state.
+    """
+    nb_path = _write_notebook(
+        tmp_path / "nb.ipynb",
+        "a = 1",
+        "b = a + 1",
+        "print('checkpoint', b)",
+        "raise ValueError('boom')",
+        "print('never runs')",
+    )
+
+    assert run_one(nb_path) is False
+
+    cells = _outputs(nb_path)
+    # The kosher prefix ran.
+    assert cells[0] == []
+    assert cells[1] == []
+    assert any("checkpoint 2" in out.get("text", "") for out in cells[2])
+    # The fourth cell is where it stopped.
+    errors = [out for out in cells[3] if out["output_type"] == "error"]
+    assert [err["ename"] for err in errors] == ["ValueError"]
+    # And nothing past it ran, even though it would have succeeded.
+    assert cells[4] == []
+
+
 def test_run_one_rejects_a_missing_notebook(tmp_path):
     with pytest.raises(RunError):
         run_one(tmp_path / "nope.ipynb")
@@ -201,3 +246,56 @@ def test_main_returns_one_when_a_notebook_fails(tmp_path, capsys):
     captured = capsys.readouterr()
     assert "FAIL" in captured.err
     assert "1 failed" in captured.out
+
+
+# --- rich outputs -----------------------------------------------------------
+
+PLOT_CELL = """\
+%matplotlib inline
+import numpy as np
+import matplotlib.pyplot as plt
+
+x = np.linspace(0, 2 * np.pi, 200)
+plt.plot(x, np.sin(x))
+plt.title("sine wave")
+plt.show()
+"""
+
+FRAME_CELL = """\
+import pandas as pd
+
+df = pd.DataFrame({"x": [0, 1, 2], "sin_x": [0.0, 0.841, 0.909]})
+df
+"""
+
+
+def test_run_saves_a_figure_and_a_dataframe_into_the_notebook_json(tmp_path):
+    """Rendered artifacts survive a headless run, so the .ipynb still shows them.
+
+    nbclient only captures what the kernel emits; a plot drawn under the wrong
+    backend, or a frame that never reaches the display hook, would leave a
+    notebook that opens blank. The assertions read the raw JSON rather than
+    going through nbformat, because what matters is the bytes on disk.
+    """
+    pytest.importorskip("matplotlib")
+    pytest.importorskip("pandas")
+
+    nb_path = _write_notebook(tmp_path / "plots.ipynb", PLOT_CELL, FRAME_CELL)
+
+    assert run_one(nb_path) is True
+
+    with open(nb_path, encoding="utf-8") as fh:
+        raw = json.load(fh)
+    plot_cell, frame_cell = raw["cells"]
+
+    png = _first_mime(plot_cell, "image/png")
+    assert png is not None, "the figure produced no image/png output"
+    # Decodes, and is genuinely a PNG rather than an error placeholder.
+    assert base64.b64decode(png).startswith(b"\x89PNG\r\n\x1a\n")
+
+    html = _first_mime(frame_cell, "text/html")
+    assert html is not None, "the DataFrame produced no text/html output"
+    assert "<table" in html
+    assert "sin_x" in html
+    # The plain-text repr rides along and carries the actual values.
+    assert "0.841" in _first_mime(frame_cell, "text/plain")
