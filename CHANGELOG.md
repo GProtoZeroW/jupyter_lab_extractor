@@ -6,6 +6,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+Work in progress on the `dev` branch, versioned `0.2.0.dev0`. Nothing here is
+released; `main` holds the latest tagged release.
+
 ## [0.1.0] - 2026-08-31
 
 First release.
