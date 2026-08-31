@@ -81,6 +81,14 @@ Load the `%%extract` magic once per notebook, preferably in the top cell:
 %load_ext jupyter_lab_extractor
 ```
 
+> **`%%extract` always writes the file, even when the cell fails.**
+>
+> The export is a copy of the cell's contents, not a record of whether those
+> contents worked. A cell that raises still lands in the target file, so a
+> broken cell gives you a broken file rather than a silently stale one. Judge
+> whether a cell ran clean from the notebook output or from `jlx run`'s exit
+> status, never from the fact that the file was written.
+
 ### Write to a new file (default: overwrite)
 
 ```python
