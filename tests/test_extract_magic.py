@@ -36,7 +36,7 @@
 # # Setup
 
 # %% [markdown]
-# ## Logging with Loguru
+# ## Logging with the standard library
 # Provides visibility into what is happening during test execution.
 
 # %%
@@ -46,12 +46,80 @@
 CONSOLE_LOG_LEVEL = "DEBUG"
 FILE_LOG_LEVEL = "DEBUG"
 
-from loguru import logger
-from pathlib import Path
+import logging
 import sys
+from datetime import datetime
+from pathlib import Path
 
-# Remove default handler to avoid duplicates
-logger.remove()
+# stdlib logging has no TRACE or SUCCESS level. loguru puts SUCCESS at 25,
+# between INFO (20) and WARNING (30), and TRACE at 5, below DEBUG (10).
+# Register both and hang matching methods off Logger so that call sites read
+# exactly as they did under loguru: logger.success("..."), logger.trace("...").
+TRACE = 5
+SUCCESS = 25
+logging.addLevelName(TRACE, "TRACE")
+logging.addLevelName(SUCCESS, "SUCCESS")
+
+
+def _log_at(level):
+    def method(self, message, *args, **kwargs):
+        if self.isEnabledFor(level):
+            # stacklevel=2 steps past this wrapper so that {function} and
+            # {line} name the caller, the way loguru reports them.
+            kwargs.setdefault("stacklevel", 2)
+            self._log(level, message, args, **kwargs)
+    return method
+
+
+logging.Logger.trace = _log_at(TRACE)
+logging.Logger.success = _log_at(SUCCESS)
+
+# loguru's default level colours, as raw ANSI escapes.
+_LEVEL_COLOR = {
+    "TRACE": "\033[36m\033[1m",     # cyan bold
+    "DEBUG": "\033[34m\033[1m",     # blue bold
+    "INFO": "\033[1m",              # bold
+    "SUCCESS": "\033[32m\033[1m",   # green bold
+    "WARNING": "\033[33m\033[1m",   # yellow bold
+    "ERROR": "\033[31m\033[1m",     # red bold
+    "CRITICAL": "\033[41m\033[1m",  # red background, bold
+}
+_RESET = "\033[0m"
+_CYAN = "\033[36m"
+_GREEN = "\033[32m"
+
+
+class ConsoleFormatter(logging.Formatter):
+    """LEVEL    | message | name:function | HH:MM:SS.mmm
+
+    Mirrors the loguru console format this notebook used to configure:
+    <level>{level: <8}</level> | <level>{message}</level> |
+    <cyan>{name}</cyan>:<cyan>{function}</cyan> | <green>{time:HH:mm:ss.SSS}</green>
+    """
+
+    def format(self, record):
+        color = _LEVEL_COLOR.get(record.levelname, "")
+        stamp = datetime.fromtimestamp(record.created).strftime("%H:%M:%S.%f")[:-3]
+        return (
+            f"{color}{record.levelname: <8}{_RESET} | "
+            f"{color}{record.getMessage()}{_RESET} | "
+            f"{_CYAN}{record.name}{_RESET}:{_CYAN}{record.funcName}{_RESET} | "
+            f"{_GREEN}{stamp}{_RESET}"
+        )
+
+
+class FileFormatter(logging.Formatter):
+    """YYYY-MM-DD HH:MM:SS.mmm | LEVEL    | pid:tid | name:function:line | message"""
+
+    def format(self, record):
+        stamp = datetime.fromtimestamp(record.created).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        return (
+            f"{stamp} | {record.levelname: <8} | "
+            f"{record.process}:{record.thread} | "
+            f"{record.name}:{record.funcName}:{record.lineno} | "
+            f"{record.getMessage()}"
+        )
+
 
 # Configure log file
 LOG_FILE = Path.cwd() / "test_extract_debug.log"
@@ -60,30 +128,38 @@ LOG_FILE = Path.cwd() / "test_extract_debug.log"
 if LOG_FILE.exists():
     LOG_FILE.unlink()
 
+logger = logging.getLogger("test_extract_magic")
+
+# The logger passes everything through; each handler applies its own level,
+# the way a loguru sink does.
+logger.setLevel(TRACE)
+
+# Re-running this cell must not stack duplicate handlers. This is the
+# equivalent of loguru's logger.remove().
+for _handler in list(logger.handlers):
+    logger.removeHandler(_handler)
+    _handler.close()
+
+# Records stop here; without this the root logger would print them a second time.
+logger.propagate = False
+
 # Console handler configuration - colorful output for Jupyter
-console_handler_id = logger.add(
-    sys.stdout,
-    format="<level>{level: <8}</level> | <level>{message}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan> | <green>{time:HH:mm:ss.SSS}</green>",
-    level=CONSOLE_LOG_LEVEL,
-    colorize=True,
-    enqueue=False,  # Must be False for Jupyter compatibility
-    backtrace=True,
-    diagnose=True
-)
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(CONSOLE_LOG_LEVEL)
+console_handler.setFormatter(ConsoleFormatter())
+logger.addHandler(console_handler)
 
-# File handler configuration - single file, overwritten each run
-file_handler_id = logger.add(
-    LOG_FILE,
-    format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {process.id}:{thread.id} | {name}:{function}:{line} | {message}",
-    level=FILE_LOG_LEVEL,
-    enqueue=True,  # Thread-safe for file operations
-    backtrace=True,
-    diagnose=True
-)
+# File handler configuration - single file, overwritten each run.
+# stdlib handlers already lock around emit, so loguru's enqueue=True has no
+# counterpart to configure here.
+file_handler = logging.FileHandler(LOG_FILE, mode="w", encoding="utf-8")
+file_handler.setLevel(FILE_LOG_LEVEL)
+file_handler.setFormatter(FileFormatter())
+logger.addHandler(file_handler)
 
-logger.success("Loguru configured successfully")
+logger.success("Logging configured successfully")
 logger.info(f"Log file: {LOG_FILE.absolute()}")
-logger.info(f"Console handler ID: {console_handler_id}, File handler ID: {file_handler_id}")
+logger.info(f"Console level: {CONSOLE_LOG_LEVEL}, file level: {FILE_LOG_LEVEL}")
 
 # %% [markdown]
 # ## Imports and ipytest Configuration
@@ -137,7 +213,8 @@ logger.debug(open("test_demo_outputs/test_output_1.py").read())
 # %%
 # %%ipytest
 
-from loguru import logger
+import logging
+logger = logging.getLogger("test_extract_magic")
 
 def test_write_new_file():
     content = open("test_demo_outputs/test_output_1.py").read()
@@ -183,7 +260,8 @@ logger.debug(open("test_demo_outputs/test_output_2.py").read())
 # %%
 # %%ipytest
 
-from loguru import logger
+import logging
+logger = logging.getLogger("test_extract_magic")
 
 def test_write_then_append():
     content = open("test_demo_outputs/test_output_2.py").read()
@@ -228,7 +306,8 @@ logger.debug(open("test_demo_outputs/test_output_2_copy.py").read())
 # %%
 # %%ipytest
 
-from loguru import logger
+import logging
+logger = logging.getLogger("test_extract_magic")
 
 def test_overwrite_copy():
     content = open("test_demo_outputs/test_output_2_copy.py").read()
@@ -252,7 +331,8 @@ def test_overwrite_copy():
 # %%extract test_demo_outputs/extracted_test.py
 # %%ipytest
 
-from loguru import logger
+import logging
+logger = logging.getLogger("test_extract_magic")
 
 def test_round_trip():
     """This test was both run by ipytest AND extracted to a file"""
@@ -279,7 +359,8 @@ logger.debug(open("test_demo_outputs/extracted_test.py").read())
 # %%ipytest
 
 import os
-from loguru import logger
+import logging
+logger = logging.getLogger("test_extract_magic")
 
 def test_extract_overwrite(tmp_path):
     """Test that default mode overwrites the file"""
@@ -309,7 +390,8 @@ def test_extract_overwrite(tmp_path):
 # %%
 # %%ipytest
 
-from loguru import logger
+import logging
+logger = logging.getLogger("test_extract_magic")
 
 def test_extract_append(tmp_path):
     """Test that -a appends to the file"""
@@ -334,7 +416,8 @@ def test_extract_append(tmp_path):
 # %%
 # %%ipytest
 
-from loguru import logger
+import logging
+logger = logging.getLogger("test_extract_magic")
 
 def test_magic_lines_stripped(tmp_path):
     """Test that % and %% magic lines are removed from output"""
@@ -363,7 +446,8 @@ def test_magic_lines_stripped(tmp_path):
 # %%ipytest
 
 import pytest
-from loguru import logger
+import logging
+logger = logging.getLogger("test_extract_magic")
 
 def test_extract_no_filename():
     """Test that missing filename raises ValueError"""
@@ -378,7 +462,8 @@ def test_extract_no_filename():
 # %%
 # %%ipytest
 
-from loguru import logger
+import logging
+logger = logging.getLogger("test_extract_magic")
 
 def test_metadata_header(tmp_path):
     """Test that header contains expected metadata fields"""
@@ -419,7 +504,8 @@ def test_metadata_header(tmp_path):
 # %%ipytest
 
 from jupyter_lab_extractor import _clean_cell
-from loguru import logger
+import logging
+logger = logging.getLogger("test_extract_magic")
 
 CLEAN_RUN_CELL = (
     "ipytest.clean()\n"
@@ -494,7 +580,8 @@ def test_magic_lines_still_stripped_with_flag():
 # %%ipytest
 
 import pytest
-from loguru import logger
+import logging
+logger = logging.getLogger("test_extract_magic")
 
 
 def test_unknown_flag_raises():
@@ -552,7 +639,8 @@ logger.debug(open("test_demo_outputs/test_stacked.py").read())
 # %%
 # %%ipytest
 
-from loguru import logger
+import logging
+logger = logging.getLogger("test_extract_magic")
 
 
 def test_stacked_file_is_clean_and_importable():

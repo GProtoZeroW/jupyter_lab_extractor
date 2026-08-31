@@ -1,6 +1,7 @@
-# Source: tests/test_extract_magic.ipynb | Cell In[17] | 2026-02-01 21:14:39
+# Source: tests/test_extract_magic.ipynb | Cell In[18] | 2026-08-30 22:15:44
 
-from loguru import logger
+import logging
+logger = logging.getLogger("test_extract_magic")
 
 def test_round_trip():
     """This test was both run by ipytest AND extracted to a file"""

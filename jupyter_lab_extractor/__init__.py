@@ -22,19 +22,28 @@ Usage:
 """
 
 # pip install ipynbname
-from IPython.core.magic import register_cell_magic
+from IPython.core.getipython import get_ipython
 from datetime import datetime
 import re
 import os
 
-try:
-    from ipynbname import _find_nb_path
-    _, _nb_path = _find_nb_path()
-    _NOTEBOOK_NAME = _nb_path.stem if _nb_path else "unknown_notebook"
-    _NOTEBOOK_REL_PATH = str(_nb_path) if _nb_path else "unknown_path"
-except Exception:
-    _NOTEBOOK_NAME = "unknown_notebook"
-    _NOTEBOOK_REL_PATH = "unknown_path"
+# `jlx run` sets this before starting the kernel. ipynbname identifies the
+# notebook by asking a running Jupyter server which one owns the kernel, so it
+# cannot work headless -- without this the header would read "unknown_path".
+_NB_PATH_ENV_VAR = "JUPYTER_LAB_EXTRACTOR_NB_PATH"
+
+_NOTEBOOK_REL_PATH = os.environ.get(_NB_PATH_ENV_VAR) or ""
+if _NOTEBOOK_REL_PATH:
+    _NOTEBOOK_NAME = os.path.splitext(os.path.basename(_NOTEBOOK_REL_PATH))[0]
+else:
+    try:
+        from ipynbname import _find_nb_path
+        _, _nb_path = _find_nb_path()
+        _NOTEBOOK_NAME = _nb_path.stem if _nb_path else "unknown_notebook"
+        _NOTEBOOK_REL_PATH = str(_nb_path) if _nb_path else "unknown_path"
+    except Exception:
+        _NOTEBOOK_NAME = "unknown_notebook"
+        _NOTEBOOK_REL_PATH = "unknown_path"
 
 
 _USAGE = "Usage: %%extract filename.py [-w|-a] [--strip-ipytest]"
@@ -71,7 +80,6 @@ def _clean_cell(cell, strip_ipytest=False):
     return '\n'.join(lines) + '\n'
 
 
-@register_cell_magic
 def extract(line, cell):
     """
     A cell magic that extracts cell contents to a file, then runs the cell normally.
@@ -131,6 +139,12 @@ def extract(line, cell):
 
 def load_ipython_extension(ipython):
     """Called by %load_ext jupyter_lab_extractor"""
-    # The @register_cell_magic decorator already registers it at import time,
-    # but this function is needed for %load_ext to work without error.
-    pass
+    ipython.register_magic_function(extract, "cell", "extract")
+
+
+# Registering at import time as well keeps a bare `import jupyter_lab_extractor`
+# working in a kernel without %load_ext. Outside IPython -- the jlx CLI, plain
+# pytest -- there is no shell, and importing the package must stay harmless.
+_ip = get_ipython()
+if _ip is not None:
+    load_ipython_extension(_ip)

@@ -17,15 +17,23 @@ dependencies = [
 [tool.setuptools]
 packages = ["jupyter_lab_extractor"]
 
+[project.scripts]
+jlx = "jupyter_lab_extractor.cli:main"
+
 [project.urls]
 Repository = "https://github.com/GProtoZeroW/jupyter_lab_extractor"
 
 [project.optional-dependencies]
+cli = [
+    "jupytext>=1.14.0",
+    "nbclient>=0.7.0",
+    "nbformat>=5.0",
+    "ipykernel>=6.0",
+]
 test = [
+    "jupyter-lab-extractor[cli]",
     "pytest>=7.0.0",
     "ipytest>=0.13.0",
-    "jupytext>=1.14.0",
-    "loguru>=0.7.0",
     "notebook>=6.0.0",
     "jupyterlab>=3.0.0",
 ]

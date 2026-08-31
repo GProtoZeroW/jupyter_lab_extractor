@@ -126,6 +126,71 @@ def test_encode_is_not_g_format(unbounded):
 
 Your notebook still cleans and runs each test as you write it; the exported file is plain pytest. The flag is opt-in — without it, `ipytest` calls are written through unchanged.
 
+## The `jlx` Command Line Tool
+
+`%%extract` runs inside a notebook. `jlx` is the other half: it drives notebooks from the
+terminal, so extraction can happen without opening Jupyter.
+
+```bash
+pip install jupyter-lab-extractor[cli]
+```
+
+### Run a notebook headlessly
+
+```bash
+jlx run notebooks/analysis.ipynb
+```
+
+Executes the notebook the way running it in the browser would: every cell runs, `%%extract`
+writes its files, and cell outputs — matplotlib figures included — are saved back into the
+`.ipynb`. The kernel comes from the notebook's own kernelspec, and cells run with the
+notebook's directory as their working directory, so relative paths behave exactly as they
+do interactively.
+
+The first failing cell stops the run. The error is reported on stderr and the notebook is
+still written, so the traceback is there in the cell when you open it:
+
+```
+FAIL  notebooks/analysis.ipynb
+      An error occurred while executing the following cell:
+      ...
+0 passed, 1 failed
+```
+
+Pass directories to run everything under them (`.ipynb_checkpoints` is skipped):
+
+```bash
+jlx run notebooks/
+```
+
+| Flag | Effect |
+|---|---|
+| `--kernel NAME` | Force a kernel. Default: the notebook's own kernelspec. |
+| `--timeout SECS` | Per-cell timeout. Default: 600. |
+| `--allow-errors` | Keep going past failing cells. The run still exits non-zero. |
+| `--check` | Execute without writing outputs back — CI mode. |
+
+Exit status is 0 only when every notebook ran clean, so `jlx run --check notebooks/` works
+as a CI gate.
+
+### Pair a notebook with a `.py` twin
+
+```bash
+jlx pair notebooks/analysis.ipynb
+```
+
+Sets up a [Jupytext](https://github.com/mwouts/jupytext) `ipynb,py:percent` pairing so the
+notebook has a script twin that diffs cleanly in version control. Give it either half —
+the `.ipynb` or the `.py` — and it creates the other.
+
+It is deliberately cautious:
+
+- **Already paired?** It says so and changes nothing. Jupytext is already keeping the two
+  sides in step.
+- **Both halves exist but are not paired?** It refuses. Syncing either direction would
+  overwrite the other side's content, so it tells you to pick the authoritative file and
+  pair it yourself.
+
 ## How It Differs From Alternatives
 
 | | Runs the cell? | Per-cell control? | Multiple output files? |
@@ -146,17 +211,16 @@ This is not a replacement for Jupytext. Jupytext is excellent for syncing notebo
 ```bash
 git clone https://github.com/GProtoZeroW/jupyter_lab_extractor.git
 cd jupyter_lab_extractor
-pip install -e .
-pip install ipytest jupytext loguru
+pip install -e ".[dev]"
 ```
 
-Tests live in `tests/test_extract_magic.ipynb` and use [ipytest](https://github.com/chmp/ipytest) for in-notebook testing. The test notebook is paired with a `.py` percent script via [Jupytext](https://github.com/mwouts/jupytext) for cleaner diffs in version control — always run from the `.ipynb`, the `.py` is for diffing only.
+Tests live in `tests/test_extract_magic.ipynb` and use [ipytest](https://github.com/chmp/ipytest) for in-notebook testing. Run it from the terminal with `jlx run tests/test_extract_magic.ipynb`. The `jlx` commands themselves are covered by plain pytest in `tests/test_cli_pair.py` and `tests/test_cli_run.py` (run those files by name — a bare `pytest` at the repo root also collects the Jupytext twin, which is not a test module). Logging in the test cells uses the standard library `logging` module, formatted to match loguru's output. The test notebook is paired with a `.py` percent script via [Jupytext](https://github.com/mwouts/jupytext) for cleaner diffs in version control — always run from the `.ipynb`, the `.py` is for diffing only.
 
 These are not required to use the package, only for development:
 
 - [ipytest](https://github.com/chmp/ipytest) — run pytest inside notebook cells
 - [Jupytext](https://github.com/mwouts/jupytext) — notebook/script pairing for version control
-- [loguru](https://github.com/Delgan/loguru) — logging in test cells
+- [nbclient](https://github.com/jupyter/nbclient) — headless notebook execution behind `jlx run`
 
 ## Credits
 
