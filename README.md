@@ -52,16 +52,18 @@ CONSTANT = 100
 
 ## Install
 
+This package is not on PyPI. Install it straight from GitHub.
+
 With `pip`:
 
 ```bash
-pip install jupyter-lab-extractor
+pip install git+https://github.com/GProtoZeroW/jupyter_lab_extractor.git@v0.1.0
 ```
 
 With [`uv`](https://github.com/astral-sh/uv):
 
 ```bash
-uv add jupyter-lab-extractor
+uv add git+https://github.com/GProtoZeroW/jupyter_lab_extractor.git --tag v0.1.0
 ```
 
 Or add it to your `pyproject.toml` by hand:
@@ -69,9 +71,16 @@ Or add it to your `pyproject.toml` by hand:
 ```toml
 [project]
 dependencies = [
-    "jupyter-lab-extractor",
+    "jupyter-lab-extractor @ git+https://github.com/GProtoZeroW/jupyter_lab_extractor.git@v0.1.0",
 ]
 ```
+
+**Pin the tag.** Dropping `@v0.1.0` tracks whatever `main` happens to be at
+install time, so two machines resolving on different days can get different
+code with no version number to tell them apart. Tags are what make a git
+dependency reproducible. Releases are listed on the
+[tags page](https://github.com/GProtoZeroW/jupyter_lab_extractor/tags); `main`
+holds the latest release and `dev` is where work lands first.
 
 ## Magic Usage
 
@@ -203,7 +212,7 @@ from the terminal, so a notebook can run and extract its files without opening
 Jupyter. That makes extraction something you can put in a CI/CD pipeline.
 
 ```bash
-pip install jupyter-lab-extractor[cli]
+pip install "jupyter-lab-extractor[cli] @ git+https://github.com/GProtoZeroW/jupyter_lab_extractor.git@v0.1.0"
 ```
 
 ### Run a notebook headlessly
