@@ -143,6 +143,20 @@ class Classifier:
     pass
 ```
 
+### Several files at once
+
+Separate paths with commas and no spaces to write the same contents to each file:
+
+```python
+%%extract src/a.py,src/b.py
+def shared():
+    pass
+```
+
+`-w` and `-a` apply to every file in the list. A space after a comma, a doubled
+comma or a trailing comma raises an error instead of writing a partial result.
+File names containing a comma are not supported.
+
 ### Combine with ipytest
 
 `%%extract` plays nicely with other cell magics. You can extract a cell to a file

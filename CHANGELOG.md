@@ -6,8 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Work in progress on the `dev` branch, versioned `0.2.0.dev0`. Nothing here is
+Work in progress on the `dev` branch, versioned `0.2.0.dev1`. Nothing here is
 released; `main` holds the latest tagged release.
+
+### Added
+
+- `%%extract a.py,b.py` writes the same contents to several files. Paths are
+  comma-separated with no spaces, and `-w`/`-a` apply to every file. A single
+  path behaves exactly as before.
+
+### Changed
+
+- `%%extract` now raises when given more than one whitespace-separated path
+  (for example `a.py b.py`) or an empty entry in a comma list. Previously the
+  extra paths were silently ignored.
 
 ## [0.1.0] - 2026-08-31
 

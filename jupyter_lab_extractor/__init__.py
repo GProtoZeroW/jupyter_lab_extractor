@@ -19,6 +19,9 @@ Usage:
 
     %%extract myfile.py -a --strip-ipytest
     # Appends, dropping ipytest.clean()/run()/autoconfig() scaffolding lines
+
+    %%extract a.py,pkg/b.py
+    # Writes the same contents to several files (comma-separated, no spaces)
 """
 
 # pip install ipynbname
@@ -98,6 +101,11 @@ def extract(line, cell):
         %%extract myfile.py -a --strip-ipytest
         # Append, dropping ipytest.clean()/run()/autoconfig() lines so that
         # repeated clean/run cells stack into one importable test module
+
+        %%extract a.py,pkg/b.py
+        # Write the same contents to several files. Separate paths with commas
+        # and no spaces; -w/-a apply to every file. File names containing a
+        # comma are not supported.
     """
     args = line.strip().split()
     if not args:
@@ -114,7 +122,20 @@ def extract(line, cell):
         # Silently ignoring a typo'd flag would quietly write the wrong contents.
         raise ValueError(f"Unknown flag(s): {' '.join(unknown)}. " + _USAGE)
 
-    target = files[0]
+    if len(files) > 1:
+        # Dropping the extra paths silently would leave a file unwritten.
+        raise ValueError(
+            f"Got {len(files)} separate paths: {' '.join(files)}. "
+            "To write several files, separate them with commas and no spaces "
+            "(a.py,b.py). " + _USAGE
+        )
+
+    targets = files[0].split(',')
+    if not all(targets):
+        raise ValueError(
+            f"Empty file name in target list {files[0]!r} "
+            "(doubled or trailing comma). " + _USAGE
+        )
     mode = 'a' if '-a' in flags else 'w'
 
     cleaned = _clean_cell(cell, strip_ipytest='--strip-ipytest' in flags)
@@ -124,14 +145,15 @@ def extract(line, cell):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     header = f"# Source: {_NOTEBOOK_REL_PATH} | Cell In[{exec_count}] | {timestamp}\n"
 
-    # Ensure parent directories exist
-    os.makedirs(os.path.dirname(target) or '.', exist_ok=True)
-    
-    # Write to the target file
-    with open(target, mode, encoding="utf-8") as f:
-        f.write(header)
-        f.write(cleaned)
-        f.write('\n')
+    # Same header, contents and mode for every target.
+    for target in targets:
+        # Ensure parent directories exist
+        os.makedirs(os.path.dirname(target) or '.', exist_ok=True)
+
+        with open(target, mode, encoding="utf-8") as f:
+            f.write(header)
+            f.write(cleaned)
+            f.write('\n')
 
     # Execute the cell normally
     get_ipython().run_cell(cell)

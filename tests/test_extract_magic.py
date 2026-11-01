@@ -30,6 +30,7 @@
 # 4. Using `%%extract` and `%%ipytest` together on the same cell
 # 5. Metadata headers and magic line stripping
 # 6. Error handling
+# 7. Writing one cell to several files with a comma-separated target list
 
 # %% [markdown]
 # ---
@@ -482,6 +483,92 @@ def test_metadata_header(tmp_path):
     assert "|" in header
     logger.debug("Header contains pipe delimiters")
     logger.success("test_metadata_header passed")
+
+# %% [markdown]
+# ---
+# # Feature: Comma-Separated Targets
+#
+# `%%extract a.py,b.py` writes the same contents to every listed file. Paths are
+# separated by commas with no spaces, and `-w`/`-a` apply to each file.
+
+# %% [markdown]
+# ## Multiple Targets Are All Written
+
+# %%
+# %%ipytest
+
+import logging
+logger = logging.getLogger("test_extract_magic")
+
+def test_extract_multiple_targets(tmp_path):
+    """Test that a comma list writes the same block to each file"""
+    a = str(tmp_path / "a.py")
+    b = str(tmp_path / "sub" / "b.py")
+
+    get_ipython().run_cell_magic('extract', f'{a},{b}', 'x = 1')
+
+    for target in (a, b):
+        content = open(target).read()
+        assert "x = 1" in content
+        assert content.count("# Source:") == 1
+        logger.debug(f"{target} holds the block")
+    assert open(a).read() == open(b).read()
+    logger.success("test_extract_multiple_targets passed")
+
+# %% [markdown]
+# ## Append Applies To Every Target
+
+# %%
+# %%ipytest
+
+import logging
+logger = logging.getLogger("test_extract_magic")
+
+def test_extract_multiple_targets_append(tmp_path):
+    """Test that -a appends to each file in the list"""
+    a = str(tmp_path / "a.py")
+    b = str(tmp_path / "b.py")
+
+    ip = get_ipython()
+    ip.run_cell_magic('extract', f'{a},{b}', 'x = 1')
+    ip.run_cell_magic('extract', f'{a},{b} -a', 'y = 2')
+
+    for target in (a, b):
+        content = open(target).read()
+        assert "x = 1" in content
+        assert "y = 2" in content
+        assert content.count("# Source:") == 2
+        logger.debug(f"{target} has both blocks")
+    logger.success("test_extract_multiple_targets_append passed")
+
+# %% [markdown]
+# ## Bad Target Lists Raise And Write Nothing
+
+# %%
+# %%ipytest
+
+import pytest
+import logging
+logger = logging.getLogger("test_extract_magic")
+
+@pytest.mark.parametrize("line_template", [
+    "{a} {b}",       # two whitespace-separated paths
+    "{a}, {b}",      # space after the comma
+    "{a},,{b}",      # doubled comma
+    "{a},{b},",      # trailing comma
+])
+def test_extract_bad_target_list(tmp_path, line_template):
+    """Test that malformed target lists raise ValueError and write no file"""
+    a = str(tmp_path / "a.py")
+    b = str(tmp_path / "b.py")
+    line = line_template.format(a=a, b=b)
+
+    with pytest.raises(ValueError):
+        get_ipython().run_cell_magic('extract', line, 'x = 1')
+
+    assert not (tmp_path / "a.py").exists()
+    assert not (tmp_path / "b.py").exists()
+    logger.success(f"bad target list {line_template!r} raised and wrote nothing")
 
 # %% [markdown]
 # ---
